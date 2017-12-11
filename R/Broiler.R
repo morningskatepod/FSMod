@@ -1,5 +1,6 @@
 setwd("C:/Users/dougl/Documents/PhD Papers/Farm Model")
 ############################################
+for(i in seq(3,7)) {
 # Set all rates to 0 before reading files
 kMature <- 0
 kBirth <- 0
@@ -18,6 +19,7 @@ Milk <- 0
 Eggs <- 0
 CumSumWt <- 0
 N <- 0
+P <- 0
 
 # Set animal numbers to 0
 nCalf <- 0
@@ -35,6 +37,9 @@ wtChicks <- 0
 
 # Read input file
 source('broiler.input.text')
+
+
+kMortality <- i
 iDay <- 1
 nDay <- iDay
 
@@ -49,8 +54,9 @@ wtBroilers <- 0
 # Flux rates
 kMature <- 1 #when chicks mature, they all do at once
 kBirth <- 1 #When chicks hatch, get all new chicks
-kCull <- 1 #when we sell, all sell
+kCull <- 1 #when we sell, all sell3
 kMortality <- kMortality*iChicks/switch_feed*2/100
+Temp <- if(Temp<=23) {23} else {if(Temp>31) {31} else{Temp}}
 
 broiler_ADG <- function(Temp) {
 # # Use this for ADG calculations
@@ -90,91 +96,19 @@ broiler_N_excretion <- function(ADG) {
     return(Nexc/1000)  # Returns N in kg
   }
 }
+
+broiler_P_excretion <- function(ADG) {
+  nP <- ifelse(nChicks > 0, nP_young, nP_mature)
+  P <- ifelse(nChicks > 0, P_young, P_mature)
+  FI <- broiler_Intake(ADG)
+  P_exc <- exp(1.058+(-0.2100*log(nP))+(-0.0160*log(P))+  #Kornegay et al. 1996
+               ((0.4088*log(nP))^2)+((-0.0087*log(P))^2)+
+                 (0.0012*log(P)*log(nP))) #g/kg intake
+  Pexc <- FI*P_exc*sum(nBroilers, nChicks)
+  return(Pexc/1000) # Return P in kg
+}
 }
 
-##################  DAIRY  #####################
-if(animal == 'dairy') {
-
-kMature <- 1/574
-kBirth <- kCull # add cows into herd at same rate as those leave
-kDry <- 1/305
-kFreshening <- 1/305
-
-
-kMilk <- 45
-
-#Start counts
-nCalf <- iCalf #Set starting count of young
-nHeifer <- iHeifer
-nLact <- iLact
-nDry <- iDry
-
-#Return adg as function of time for female cows 0 - 2500 days
-calf_ADG <- function(t) { #From Perotto et al, 1992
-  A <- 619 #asymptotic weight, kg
-  k <- 0.0020 #Rate parameter
-  b <- 0.905 # integration constant
-  M <- 1.2386 # inflection parameter
-  return((M*A*k*b*exp(-k*t))*((1-(b*exp(-k*t)))^M)*((1-(b*exp(-k*t)))^-1)) #returns ADG per cow, kg/d
-}
-
-#### Predicting DMI for four groups of dairy cows on farm (Fox et al. 2004) ###
-
-# CETI (Fox & Tylutki 1998)
-CETI <- 27.88 - (0.456 * Temp) + (0.010754 * Temp^2)- (0.4905 * RH) + (0.00088 * RH^2)+ (1.1507 * WS) - (0.126447 * WS^2)+ (0.019876 * Temp * RH)- (0.046313 * Temp * WS)+ (0.4167 * HRS)
-DMINC <- (119.62 - 0.9708 * CETI)/100
-DMIAF_temp <- if(Temp > 20) {
-  DMINC
-} else {1.0433 - (0.0044 * Temp) + (0.0001 * Temp^2)}
-
-calf_NEma <- (1.37 * calf_ME) - (0.138 * calf_ME^2) + (0.0105 * calf_ME^3) - 1.12
-yearling_NEma <- (1.37 * yearling_ME) - (0.138 * yearling_ME^2) + (0.0105 * yearling_ME^3) - 1.12
-
-#correction for breed index (fox et al 2004)
-BI <- ifelse(BI == 1, 1.08,1)
-
-#Calves
-calf_DMI <- function(BW) {
-  SBW <- 0.94*BW
-  DMI <- (SBW^0.75)*(((0.2435*calf_NEma)*(0.0466*calf_NEma^2)-0.1128)/calf_NEma)*DMIAF_temp*BI
-}
-#Yearlings
-yearling_DMI <- function(BW) {
-  SBW <- 0.94*BW
-  DMI <- (SBW^0.75)*(((0.2435*yearling_NEma)*(0.0466*yearling_NEma^2)-0.0869)/yearling_NEma)*DMIAF_temp*BI
-}
-#Lactating Cows
-lact_cow_DMI <- function(BW) {
-  DMI <- ((0.0185 * BW) + (0.305 * FCM))*DMIAF_temp*BI
-}
-#Dry Cows
-dry_cow_DMI <- function(BW) {
-  SBW <- 0.94*BW
-  DMI <- (0.0185 * SBW)*DMIAF_temp*BI
-}
-
-##Excretion Calculations
-
-# Nitrogen excreted (Nennich et al. 2005)
-calf_N_excretion <- function() {
-  calf_DMI <- calf_DMI(wtCalf/nCalf)
-  return((calf_DMI*calf_CP*112.55)*nCalf)
-}
-yearling_N_excretion <- function() {
-  yearling_DMI <- yearling_DMI(wtHeifer/nHeifer)
-  return((yearling_DMI*yearling_CP*78.39+51.4)*nHeifer)
-}
-lact_N_excretion <- function() {
-  lact_DMI <- lact_cow_DMI(wtLact/nLact)
-  return(((lact_DMI*lact_CP*84.1)+(wtLact/nLact*0.196))*nLact)
-}
-#Use beef equation
-dry_N_excretion <- function() {
-  dry_DMI <- dry_cow_DMI(wtDry/nDry)
-  return((dry_DMI*dry_CP*78.39+51.4)*nDry)
-}
-
-}
 
 #####################  BEEF #######################
 if(animal == 'beef') {
@@ -245,90 +179,7 @@ layer_N_excretion <- function() {
 
 }
 
-}
-#####################  FOR LOOP #######################
 
-#Write an array
-val <- array(1, dim = c(10, length(seq(iDay,fDay, by = 1))))
+ggplot(results, aes(day, value, color = variable, group = variable)) +
+  scale_color_discrete(name = "Temperature",labels = c('23','25','27','29','31'))+geom_line(size = 2) + geom_point(size = 3)
 
-while(nDay <= fDay) {
-  if(animal == 'broiler') {
-
-    # Set t for broilers, know switch times
-    t <- ifelse(nDay%%(switch_feed*2) == 0,2, ifelse(nDay%%switch_feed ==0,1,0))
-
-    # Rates
-    born <- (t==2)*kBirth*iChicks
-    maturing <- (t==1)*kMature*nChicks #t switches for broilers
-    culling <- (t==2)*kCull*nBroilers
-    # laying <- kLaying*nLayers
-
-    ADG <- broiler_ADG(Temp)
-    Nexc <- broiler_N_excretion(ADG)
-
-
-    # Update Numbers of Animals
-    nBroilers <- nBroilers+(maturing-culling)-(kMortality*(nBroilers > 0))
-    nChicks <- nChicks+(born-maturing)-(kMortality*(nChicks > 0))
-    meat_produced <- culling*(wtBroilers)
-
-    wtBroilers <- (nBroilers > 0)*(wtBroilers + ADG*nBroilers + (t==1)*wtChicks)
-    wtChicks <- (nChicks > 0)*(wtChicks + ADG*nChicks)
-    if(t==2) {wtChicks <- 0.025*nChicks} #reset new chicks
-  }
-
-  if(animal == 'dairy') {
-    born <- kBirth*nLact*0.5
-    maturing <- kMature*nCalf
-    freshening <- kFreshening*nDry+kFreshening*nHeifer
-    drying <- kDry*nLact
-    culling <- kCull*nLact
-    Nexc <- calf_N_excretion()+yearling_N_excretion()+lact_N_excretion()+dry_N_excretion()
-
-    #Update Numbers of Animals
-    nCalf <- nCalf #+ born
-    nHeifer <- nHeifer #+ maturing
-    nLact <- nLact #+ freshening
-    nDry <- nDry #+ drying
-    meat_produced <- culling*(wtLact)
-  }
-
-  # New Totals
-  Meat <- Meat + meat_produced
-  # Eggs <- Eggs + laying*nLayers
-  # Milk <- Milk + kMilk*nLact
-  N <- N + Nexc
-
-  # Update Numbers of Animals
-
-
-
-  # Update values
-  val[1,nDay] <- nCalf
-  val[2,nDay] <- nHeifer
-  val[3,nDay] <- nLact
-  val[4,nDay] <- nDry
-  val[5,nDay] <- nChicks
-  val[6,nDay] <- nBroilers+nChicks
-  val[7,nDay] <- wtBroilers+wtChicks
-  val[8,nDay] <- ADG*1000
-  val[9,nDay] <- N
-  val[10,nDay] <- Meat
-
-  nDay = nDay+1
-}
-##############################################
-
-
-# Plot results
-par(mfrow = c(1,3))
-# plot(val[1,], main = 'Calves', xlab = 'Day', ylab = 'Count')
-# plot(val[2,], main = 'Heifers', xlab = 'Day', ylab = 'Count')
-# plot(val[3,], main = 'Lactating Cows', xlab = 'Day', ylab = 'Count')
-# plot(val[4,], main = 'Dry Cows', xlab = 'Day', ylab = 'Count')
-# plot(val[5,], main = 'Chicks', xlab = 'Day', ylab = 'Count')
-# plot(val[6,], main = 'Broilers', xlab = 'Day', ylab = 'Count')
-plot(val[7,], main = 'Broiler Weight', xlab = 'Day', ylab = 'Wt, kg')
-plot(val[8,], main = "ADG", xlab = 'Day', ylab = 'g/d')
-plot(val[9,], main = "N Excretion", xlab = 'Day', ylab = 'N, kg')
-# plot(val[10,], main = "Meat", xlab = 'Day', ylab = 'Wt, kg')
