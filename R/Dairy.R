@@ -1,4 +1,30 @@
+setwd("C:/Users/dougl/Documents/PhD Papers/Farm Model")
+############################################
 
+# Set all rates to 0 before reading files
+kMature <- 0
+kBirth <- 0
+kCull <- 0
+kDry <- 0
+kFreshening <- 0
+kMilk <- 0
+kMature <- 0
+kBirth <- 0
+kMortality <- 0 #as whole number
+
+# Set outputs to 0
+Meat <- 0
+Milk <- 0
+
+# Set animal numbers to 0
+nCalf <- 0
+nHeifer <- 0
+nLact <- 0
+nDry <- 0
+wtCalf <- 0
+wtHeifer <- 0
+wtLact <- 0
+wtDry <- 0
 
 ##################  DAIRY  #####################
 if(animal == 'dairy') {

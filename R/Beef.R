@@ -43,6 +43,9 @@ nBreed.cow.grow <- 0
 nBreed.bull.grow <- 0
 nBreed.bull.mature <- 0
 
+# Set animal weights
+
+
 # Mortality Rates at any step
 kMortality <- 7 #as a whole number
 
@@ -132,24 +135,38 @@ if(animal == 'beef') {
   ##Excretion Calculations
 
   # Nitrogen excreted (Nennich et al. 2005)
-  calf_N_excretion <- function() {
+  # Combination of cow and bull calves
+  Prod.calf.N <- function() {
+    wtCalf <- wtProd.bull.calf+wtProd.cow.calf
+    nCalf <- nProd.bull.calf+nProd.cow.calf
     calf_DMI <- calf_DMI(wtCalf/nCalf)
     return((calf_DMI*calf_CP*DOF/6.25)-(41.2*(calf.max.wt-calf.initial.wt))+
              ((0.243*DOF*((calf.max.wt+calf.initial.wt)/2)^0.75)*((calf.max.wt-calf.initial.wt)/DOF)^1.097)*nCalf)
   }
-  steer_N_excretion <- function() {
-    growing_DMI <- growing_DMI(wtgrowing/ngrowing)
-    return((calf_DMI*calf_CP*DOF/6.25)-(41.2*(steer.max.wt-steer.initial.wt))+
+  Prod.steer.grow.N <- function() {
+    growing_DMI <- growing_DMI(wtProd.steer.grow/nProd.steer.grow)
+    return((growing_DMI*growing_CP*DOF/6.25)-(41.2*(steer.max.wt-steer.initial.wt))+
              ((0.243*DOF*((steer.max.wt+steer.initial.wt)/2)^0.75)*((steer.max.wt-steer.initial.wt)/DOF)^1.097)*nProd.steer.grow)
   }
-  cow_N_excretion <- function() {
-    growing_DMI <- growing_DMI(wtgrowing/ngrowing)
-    return((calf_DMI*calf_CP*DOF/6.25)-(41.2*(steer.max.wt-steer.initial.wt))+
+  Prod.cow.grow.N <- function() {
+    growing_DMI <- growing_DMI(wtProd.cow.grow/nProd.cow.grow)
+    return((growing_DMI*growing_CP*DOF/6.25)-(41.2*(steer.max.wt-steer.initial.wt))+
              ((0.243*DOF*((steer.max.wt+steer.initial.wt)/2)^0.75)*((steer.max.wt-steer.initial.wt)/DOF)^1.097)*nProd.steer.grow)
   }
-  lact_N_excretion <- function() {
-    lact_DMI <- lact_cow_DMI(wtLact/nLact)
-    return(((lact_DMI*lact_CP*84.1)+(wtLact/nLact*0.196))*nLact)
+  Breed.bull.grow.N <- function() {
+    growing_DMI <- growing_DMI(wtBreed.bull.grow/nBreed.bull.grow)
+    return((growing_DMI*growing_CP*DOF/6.25)-(41.2*(steer.max.wt-steer.initial.wt))+
+             ((0.243*DOF*((steer.max.wt+steer.initial.wt)/2)^0.75)*((steer.max.wt-steer.initial.wt)/DOF)^1.097)*nProd.steer.grow)
+  }
+  Breed.cow.grow.N <- function() {
+    growing_DMI <- growing_DMI(wtProd.cow.grow/nProd.cow.grow)
+    return((growing_DMI*growing_CP*DOF/6.25)-(41.2*(steer.max.wt-steer.initial.wt))+
+             ((0.243*DOF*((steer.max.wt+steer.initial.wt)/2)^0.75)*((steer.max.wt-steer.initial.wt)/DOF)^1.097)*nProd.steer.grow)
+  }
+  Breed.bull.mature.N <- function() {
+    growing_DMI <- growing_DMI(wtProd.cow.grow/nProd.cow.grow)
+    return((growing_DMI*growing_CP*DOF/6.25)-(41.2*(steer.max.wt-steer.initial.wt))+
+             ((0.243*DOF*((steer.max.wt+steer.initial.wt)/2)^0.75)*((steer.max.wt-steer.initial.wt)/DOF)^1.097)*nProd.steer.grow)
   }
   #Use beef equation
   dry_N_excretion <- function() {
