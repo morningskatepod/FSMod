@@ -1,6 +1,6 @@
 setwd("C:/Users/dougl/Documents/PhD Papers/Farm Model")
 ############################################
-for(i in seq(3,7)) {
+
 # Set all rates to 0 before reading files
 kMature <- 0
 kBirth <- 0
@@ -10,9 +10,9 @@ kFreshening <- 0
 kMilk <- 0
 kMature <- 0
 kBirth <- 0
-kCull <- 0
 kLaying <- 0
-kMortality <- 0
+kMortality <- 0 #as whole number
+
 # Set outputs to 0
 Meat <- 0
 Milk <- 0
@@ -39,7 +39,7 @@ wtChicks <- 0
 source('broiler.input.text')
 
 
-kMortality <- i
+kMortality <- 7 #as whole number %
 iDay <- 1
 nDay <- iDay
 
@@ -54,7 +54,7 @@ wtBroilers <- 0
 # Flux rates
 kMature <- 1 #when chicks mature, they all do at once
 kBirth <- 1 #When chicks hatch, get all new chicks
-kCull <- 1 #when we sell, all sell3
+kCull <- 1 #when we sell, all sell
 kMortality <- kMortality*iChicks/switch_feed*2/100
 Temp <- if(Temp<=23) {23} else {if(Temp>31) {31} else{Temp}}
 
@@ -178,8 +178,5 @@ layer_ADG <- function() {
 layer_N_excretion <- function() {
 
 }
-
-
-ggplot(results, aes(day, value, color = variable, group = variable)) +
-  scale_color_discrete(name = "Temperature",labels = c('23','25','27','29','31'))+geom_line(size = 2) + geom_point(size = 3)
+}
 
