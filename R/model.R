@@ -1,10 +1,13 @@
 setwd("C:/Users/dougl/Documents/PhD Papers/Farm Model")
 
 #####################  FOR LOOP #######################
+#Edit source of dairy file
 source('FSMod/R/Dairy.R')
 
 #Write an array
 val <- array(1, dim = c(10, length(seq(iDay,fDay, by = 1))))
+flow <- array(1, dim = c(9, length(seq(iDay,fDay, by = 1))))
+
 
 while(nDay <= fDay) {
   if(animal == 'broiler') {
@@ -33,22 +36,60 @@ while(nDay <= fDay) {
     if(t==2) {wtChicks <- 0.025*nChicks} #reset new chicks
   }
 
+  if(animal == 'layer') {
+
+    # Set t for broilers, know switch times
+    t <- ifelse(nDay%%(switch_feed*2) == 0,2, ifelse(nDay%%switch_feed ==0,1,0))
+
+    # Fluxes
+    maturing <- (t==1)*(iChicks.brown+iChicks.white)
+    new.layers <- (t==2)*(iPullets.brown+iPullets.white)
+    molting <- (t==3)*(molt == 1)*(nLaying.hens.brown+nLaying.hens.white)
+
+    # Updating Counts
+    nPullets.brown <- nPullets.brown + (maturing - new.layers)*(nChicks.brown > 0)
+    nLaying.hens.brown <- nLaying.hens.brown + (new.layers-molting)*(nLaying.hens.brown > 0)
+    nBreed.hens.brown <- iBreed.hens.brown
+    nMolt.hens.brown <- nMolt.hens.brown + (molting)
+    nPullets.white <- iPullets.white + (maturing - new.layers)*(nChicks.white > 0)
+    nLaying.hens.white <- iLaying.hens.white + (maturing - new.layers)*(nLaying.hens.white > 0)
+    nBreed.hens.white <- iBreed.hens.white
+    nMolt.hens.white <- nMolt.hens.white
+  }
+
   if(animal == 'dairy') {
-    born <- kBirth*nLact*0.5
-    maturing <- kMature*nCalf
-    freshening <- kFreshening*nDry+kFreshening*nHeifer
-    drying <- kDry*nLact
-    culling <- kCull*nLact
+    born <- ((kFreshening*nDry*0.5)+(kFreshening*nHeifer.first.dry*0.5)+
+               +(kMature*nCalf*0.5)+
+      (kFreshening*nHeifer.second.dry*0.5)+(kFreshening*nHeifer.third.dry*0.5))*kMortality/100
+    new.lact.herd <- (kFreshening*nDry)*(100-kMortality)/100
+    new.first.lact <- kMature*nCalf*(100-kMortality)/100
+    new.second.lact <- kFreshening*nHeifer.first.dry*(100-kMortality)/100
+    new.third.lact <- kFreshening*nHeifer.second.dry*(100-kMortality)/100
+    new.first.dry <- kDry*nHeifer.first.lact*(100-kMortality)/100
+    new.second.dry <- kDry*nHeifer.second.lact*(100-kMortality)/100
+    new.third.dry <- kDry*nHeifer.third.lact*(100-kMortality)/100
+    new.dry.herd <- kDry*nLact*(100-kMortality)/100
+    new.lact.from.third <- kFreshening*nHeifer.third.dry*(100-kMortality)/100
+    culling <- (kCull/100*nLact)/365
 
     # Excretions
-    Nexc <- calf_N_excretion()+heifer_N_excretion()+lact_N_excretion()+dry_N_excretion()
-    Pexc <- calf_P_excretion()+heifer_P_excretion()+lact_P_excretion()+dry_P_excretion()
+    Nexc <- calf.N()+heifer.first.lact.N()+heifer.second.lact.N()+heifer.third.lact.N()+
+      heifer.first.dry.N()+heifer.second.dry.N()+heifer.third.dry.N()+cow.lact.N()+cow.dry.N()
+    Pexc <- calf.P()+heifer.first.lact.P()+heifer.second.lact.P()+heifer.third.lact.P()+
+      heifer.first.dry.P()+heifer.second.dry.P()+heifer.third.dry.P()+cow.lact.P()+cow.dry.P()
 
     #Update Numbers of Animals
-    nCalf <- nCalf #+ born
-    nHeifer <- nHeifer #+ maturing
-    nLact <- nLact #+ freshening
-    nDry <- nDry #+ drying
+    nCalf <- nCalf + born - new.first.lact + 1
+    nHeifer.first.dry <- nHeifer.first.dry + new.first.dry - new.second.lact
+    nHeifer.second.dry <- nHeifer.second.dry + new.second.dry - new.third.lact
+    nHeifer.third.dry <- nHeifer.third.dry + new.third.dry - new.lact.from.third
+    nHeifer.first.lact <- nHeifer.first.lact + new.first.lact - new.first.dry
+    nHeifer.second.lact <- nHeifer.second.lact + new.second.lact - new.second.dry
+    nHeifer.third.lact <- nHeifer.third.lact + new.third.lact - new.third.dry
+    nLact <- nLact + new.lact.herd - culling - new.dry.herd + new.lact.from.third
+    nDry <- nDry + new.dry.herd - new.lact.herd
+    nCalf <- ifelse(nCalf < 0, 0, nCalf)
+
     meat_produced <- culling*(wtLact)
   }
 
@@ -74,8 +115,10 @@ while(nDay <= fDay) {
     slaughter.bred.bulls <- kBreed.bull.slaughter * nBreed.bull.mature
 
     # Excretions
-    Nexc <- calf_N_excretion()+growing_N_excretion()+lact_N_excretion()+dry_N_excretion()
-    Pexc <- calf_P_excretion()+growing_P_excretion()+lact_P_excretion()+dry_P_excretion()
+    Nexc <- calf.N()+heifer.first.lact.N()+heifer.second.lact.N()+heifer.third.lact.N()+
+      heifer.first.dry.N()+heifer.second.dry.N()+heifer.third.dry.N()+cow.lact.N()+cow.dry.N()
+    Pexc <- calf.P()+heifer.first.lact.P()+heifer.second.lact.P()+heifer.third.lact.P()+
+      heifer.first.dry.P()+heifer.second.dry.P()+heifer.third.dry.P()+cow.lact.P()+cow.dry.P()
 
     # Update Numbers of Animals
     nCow.bred <- nCow.bred + bred.cows - dry.cows - slaughter.lact.cows
@@ -108,16 +151,23 @@ while(nDay <= fDay) {
   P.day <- Pexc
 
   # Update Numbers of Animals
-
-
+  flow[1,nDay] <- nCalf
+  flow[2,nDay] <- nHeifer.first.lact
+  flow[3,nDay] <- nHeifer.first.dry
+  flow[4,nDay] <- nLact
+  flow[5,nDay] <- nDry
+  flow[6,nDay] <- nHeifer.second.lact
+  flow[7,nDay] <- nHeifer.third.dry
+  flow[8,nDay] <- nHeifer.third.lact
+  flow[9,nDay] <- nHeifer.second.dry
 
   # Update values
   val[1,nDay] <- nCalf
-  val[2,nDay] <- nHeifer
+  val[2,nDay] <- nHeifer.third.dry
   val[3,nDay] <- nLact
   val[4,nDay] <- nDry
-  val[5,nDay] <- Pexc
-  val[6,nDay] <- nBroilers+nChicks
+  val[5,nDay] <- total.parlor
+  val[6,nDay] <- total.drypen
   val[7,nDay] <- Meat
   # val[8,nDay] <- ADG*1000
   val[9,nDay] <- Nexc
@@ -126,30 +176,17 @@ while(nDay <= fDay) {
   nDay = nDay+1
 }
 ##############################################
-# results <- rbind(results, c(Meat,N,P))
-
 
 # Plot results
 par(mfrow = c(2,5))
-plot(val[1,], main = 'Calves', xlab = 'Day', ylab = 'Count')
-plot(val[2,], main = 'Heifers', xlab = 'Day', ylab = 'Count')
-plot(val[3,], main = 'Lactating Cows', xlab = 'Day', ylab = 'Count')
-plot(val[4,], main = 'Dry Cows', xlab = 'Day', ylab = 'Count')
-plot(val[5,], main = 'P per day', xlab = 'Day', ylab = 'kg, d')
-plot(val[6,], main = 'Broiler Numbers', xlab = 'Day', ylab = 'Count')
-plot(val[7,], main = 'Meat', xlab = 'Day', ylab = 'Wt, kg')
-plot(val[8,], main = "ADG", xlab = 'Day', ylab = 'g/d')
-plot(val[9,], main = "N Excretion", xlab = 'Day', ylab = 'N, kg')
-plot(val[10,], main = "P Excretion", xlab = 'Day', ylab = 'Wt, kg')
-#
-#
-# ggplot(results, aes(cull, value, label = round(value,2), group = variable)) +
-#   geom_bar(aes(fill = variable), color = 'black', position = 'dodge', stat = 'identity') +
-#   xlab("Mortality Rate, %") + ylab("Increase in Production")+
-#   scale_y_continuous(labels = percent) +
-#   geom_text(size = 4, position = position_dodge(width = 0.9), vjust = -0.5) +
-#   theme(legend.title = element_blank()) +
-#   ggtitle('Production of Meat, Excreted N and P')+
-#   theme(text = element_text(size = 15), plot.title = element_text(hjust = 0.5))
+plot(flow[1,], main = 'Calves', xlab = 'Day', ylab = 'Count')
+plot(flow[2,], main = '1st Lact Heifers', xlab = 'Day', ylab = 'Count')
+plot(flow[3,], main = '1st Dry Heifers', xlab = 'Day', ylab = 'Count')
+plot(flow[6,], main = '2nd Lact Heifers', xlab = 'Day', ylab = 'Count')
+plot(flow[9,], main = "2nd Dry Heifers", xlab = 'Day', ylab = 'Count')
+plot(flow[8,], main = "3rd Lact Heifers", xlab = 'Day', ylab = 'Count')
+plot(flow[7,], main = '3rd Dry Heifers', xlab = 'Day', ylab = 'Count')
+plot(flow[4,], main = 'Lact Cows', xlab = 'Day', ylab = 'Count')
+plot(flow[5,], main = 'Dry Cows', xlab = 'Day', ylab = 'Count')
 
-# results <- readRDS('n_exc.RDS')
+# plot(val[10,], main = "P Excretion", xlab = 'Day', ylab = 'Wt, kg')

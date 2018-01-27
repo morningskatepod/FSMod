@@ -1,13 +1,51 @@
+# Set Rates to 0
+kMature <- 0
+kSpent.Hens <- 0
+kMolt <- 0
+kBreed.eggs <- 0
+kLaying.eggs <- 0
+kLaying.spent <- 0
+kVolitilization <- 0
 
+# Set animal numbers to 0
+nChicks.brown <- 0
+nPullets.brown <- 0
+nLaying.hens.brown <- 0
+nBreed.hens.brown <- 0
+nBreed.males.brown <- 0
+nMolt.hens.brown <- 0
+nChicks.white <- 0
+nPullets.white <- 0
+nLaying.hens.white <- 0
+nBreed.hens.white <- 0
+nBreed.males.white <- 0
+nMolt.hens.white <- 0
 
+# Set outputs to 0
+Eggs <- 0
+N <- 0
+P <- 0
+
+# Read input file
+source('broiler.input.text')
+
+iDay <- 1
+nDay <- iDay
 
 #############  layerS  ##################
 if(animal == 'layer') {
 
-  nChicks <- iChicks #Set starting count of young
-  wtChicks <- 0.025*nChicks #each chick = 25g
-  nlayers <- 0
-  wtlayers <- 0
+  ## Start count
+  nPullets.brown <- iPullets.brown
+  nLaying.hens.brown <- iLaying.hens.brown
+  nBreed.hens.brown <- iBreed.hens.brown
+  nMolt.hens.brown <- iMolt.hens.brown
+  nPullets.white <- iPullets.white
+  nLaying.hens.white <- iLaying.hens.white
+  nBreed.hens.white <- iBreed.hens.white
+  nMolt.hens.white <- iMolt.hens.white
+  wtPullets.brown <- 0
+  wtPullets.white <- 0
 
   # Flux rates
   kMature <- 1 #when chicks mature, they all do at once
@@ -16,18 +54,35 @@ if(animal == 'layer') {
   kMortality <- kMortality*iChicks/switch_feed*2/100
   Temp <- if(Temp<=23) {23} else {if(Temp>31) {31} else{Temp}}
 
+### Daily Gain
+
   layer_ADG <- function(Temp) {
     # # Use this for ADG calculations
     # # For use as BW in ADG eq.
-    wt_per_bird <- sum(wtChicks,wtlayers)/sum(nChicks,nlayers)
-    wt_per_bird <- wt_per_bird*1000
+    wt_per_bird.brown <- sum(wtChicks,wtPullets.brown)/sum(nChicks,nPullets.brown)
+    wt_per_bird.brown <- wt_per_bird.brown*1000
+    wt_per_bird.white <- sum(wtChicks,wtPullets.white)/sum(nChicks,nPullets.white)
+    wt_per_bird.white <- wt_per_bird.white*1000
+    week <- round(nDay/7+1)
 
-    #May et al 1998
-    ADG <- -31.797 + (1.2071*Temp) + (0.21457*wt_per_bird) - (8.852E-5*wt_per_bird^2) +
-      (1.51E-8*wt_per_bird^3) - (2.0772E-3*Temp*wt_per_bird)
+    if(nPullets.brown > 0) {
+      Wm = 1.9143
+      b = 0.14517
+      t.star = 8.57678
+      ADG <- Wm*b*(exp(-exp(-b*(week-t.star))))*exp(-b*(week-t.star))
+
+    }
+    if(nPullets.white > 0) {
+      Wm = 1.50524
+      b = 0.16687
+      t.star = 7.54872
+      ADG <- Wm*b*(exp(-exp(-b*(week-t.star))))*exp(-b*(week-t.star))
+    }
 
     return(ADG/1000)
   }
+
+### Dry Matter Intake
 
   #Zuidhof et al 2014
   layer_Intake <- function(ADG) {
@@ -36,6 +91,9 @@ if(animal == 'layer') {
     Intake <- I_ME/ME
     return(Intake)
   }
+
+
+### Excretions
 
   layer_N_excretion <- function(ADG) {
     CP <- ifelse(nChicks>0, CPy,CPo)
