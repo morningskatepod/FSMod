@@ -67,16 +67,16 @@ if(animal == 'dairy') {
     return(A*(1-(b*exp(-k*t)))^M)
   }
 
-  #Determining average weights for each group per animal
-  wtCalf <- integrate(dairy_ADG, lower = 0, upper  = days.to.first.calf)[[1]]/days.to.first.calf
-  wtHeifer.first.lact <- integrate(dairy_ADG, lower = days.to.first.calf, upper  = days.to.first.calf+305)[[1]]/305
-  wtHeifer.second.lact <- integrate(dairy_ADG, lower = days.to.first.calf+365, upper  = days.to.first.calf+365+305)[[1]]/305
-  wtHeifer.third.lact <- integrate(dairy_ADG, lower = days.to.first.calf+365+365, upper  = days.to.first.calf+365+365+305)[[1]]/305
-  wtHeifer.first.dry <- integrate(dairy_ADG, lower = days.to.first.calf+305, upper  = days.to.first.calf+365)[[1]]/60
-  wtHeifer.second.dry <- integrate(dairy_ADG, lower = days.to.first.calf+365+305, upper  = days.to.first.calf+365+365)[[1]]/60
-  wtHeifer.third.dry <- integrate(dairy_ADG, lower = days.to.first.calf+365+365+305, upper  = days.to.first.calf+365*3)[[1]]/60
-  wtLact <- dairy_ADG(2500)
-  wtDry <- dairy_ADG(2500)
+  # #Determining average weights for each group per animal
+  # wtCalf <- integrate(dairy_ADG, lower = 0, upper  = days.to.first.calf)[[1]]/days.to.first.calf
+  # wtHeifer.first.lact <- integrate(dairy_ADG, lower = days.to.first.calf, upper  = days.to.first.calf+305)[[1]]/305
+  # wtHeifer.second.lact <- integrate(dairy_ADG, lower = days.to.first.calf+365, upper  = days.to.first.calf+365+305)[[1]]/305
+  # wtHeifer.third.lact <- integrate(dairy_ADG, lower = days.to.first.calf+365+365, upper  = days.to.first.calf+365+365+305)[[1]]/305
+  # wtHeifer.first.dry <- integrate(dairy_ADG, lower = days.to.first.calf+305, upper  = days.to.first.calf+365)[[1]]/60
+  # wtHeifer.second.dry <- integrate(dairy_ADG, lower = days.to.first.calf+365+305, upper  = days.to.first.calf+365+365)[[1]]/60
+  # wtHeifer.third.dry <- integrate(dairy_ADG, lower = days.to.first.calf+365+365+305, upper  = days.to.first.calf+365*3)[[1]]/60
+  # wtLact <- dairy_ADG(2500)
+  # wtDry <- dairy_ADG(2500)
 
 ################ Predicting DMI (Fox et al. 2004) ###############
 

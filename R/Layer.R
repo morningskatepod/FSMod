@@ -5,6 +5,7 @@ kMolt <- 0
 kBreed.eggs <- 0
 kLaying.eggs <- 0
 kLaying.spent <- 0
+kMortality <- 0
 kVolitilization <- 0
 
 # Set animal numbers to 0
@@ -25,9 +26,10 @@ nMolt.hens.white <- 0
 Eggs <- 0
 N <- 0
 P <- 0
+Meat <- 0
 
 # Read input file
-source('broiler.input.text')
+source('layer.input.text')
 
 iDay <- 1
 nDay <- iDay
@@ -51,12 +53,11 @@ if(animal == 'layer') {
   kMature <- 1 #when chicks mature, they all do at once
   kBirth <- 1 #When chicks hatch, get all new chicks
   kCull <- 1 #when we sell, all sell
-  kMortality <- kMortality*iChicks/switch_feed*2/100
   Temp <- if(Temp<=23) {23} else {if(Temp>31) {31} else{Temp}}
 
 ### Daily Gain
 
-  layer_ADG <- function(Temp) {
+  layer_ADG <- function() {
     # # Use this for ADG calculations
     # # For use as BW in ADG eq.
     wt_per_bird.brown <- sum(wtChicks,wtPullets.brown)/sum(nChicks,nPullets.brown)
@@ -81,6 +82,28 @@ if(animal == 'layer') {
 
     return(ADG/1000)
   }
+### Total N needed from SID Lys requirement
+  Total.N.req <- function() {
+    W <- (sum(wtChicks,wtlayers)/sum(nChicks,nlayers))^0.75
+    ADG <- layer_ADG()
+    Egg.Mass <- 56
+    SID.Lys <- 0.07*W + 0.02*ADG + 0.0124*Egg.Mass
+    ME.int <- (196*(sum(wtChicks,wtlayers)/sum(nChicks,nlayers))^0.7543)+2.4833*ADG*1000 #Convert to g
+    DMI <- 1/(2900/ME.int)*1000 # in grams
+    dig.lys <- SID.Lys/DMI
+    N.req <- SID.Lys*1*0.1919 +
+      SID.Lys*0.53*0.0939 +
+      SID.Lys*0.80*0.1176 +
+      SID.Lys*0.23*0.1372 +
+      SID.Lys*0.96*0.3216 +
+      SID.Lys*0.80*0.1599 +
+      SID.Lys*0.93*0.1196 +
+      SID.Lys*0.78*0.1068 +
+      SID.Lys*1.19*0.1068 +
+      SID.Lys*0.28*0.2708 +
+      SID.Lys*0.63*0.0848
+    Total.N <- N.req/0.44*6.25
+  }
 
 ### Dry Matter Intake
 
@@ -101,8 +124,8 @@ if(animal == 'layer') {
     # For Mature Birds
     if(nlayers > 0) {
       Nintake <- FI*1000 * nlayers * (CP/100)/6.25
-      Nret <- 29 * (ADG*nlayers) # Constant 29 g/kg of BW gain according to ITAVI, 2013
-      Nexc <- Nintake - Nret # Formula from Belloir et al. 2017
+      Nret <- Total.N.req
+      Nexc <- Nintake - Nret
       return(Nexc/1000) # Returns N in kg
     }
     # For young birds

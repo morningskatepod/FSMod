@@ -2,7 +2,7 @@ setwd("C:/Users/dougl/Documents/PhD Papers/Farm Model")
 
 #####################  FOR LOOP #######################
 #Edit source of dairy file
-source('FSMod/R/Dairy.R')
+source('FSMod/R/Beef.R')
 
 #Write an array
 val <- array(1, dim = c(10, length(seq(iDay,fDay, by = 1))))
@@ -39,22 +39,26 @@ while(nDay <= fDay) {
   if(animal == 'layer') {
 
     # Set t for broilers, know switch times
-    t <- ifelse(nDay%%(switch_feed*2) == 0,2, ifelse(nDay%%switch_feed ==0,1,0))
+    t <- if(nDay%%(molt.d) == 0) {2} else if(nDay == pullet.d | nDay%%(cull.d+pullet.d) == 0) {1} else if((nDay-cull.d)%%(cull.d+pullet.d) == 0) {3} else {0}
 
     # Fluxes
-    maturing <- (t==1)*(iChicks.brown+iChicks.white)
-    new.layers <- (t==2)*(iPullets.brown+iPullets.white)
+    new.pullets <- (t==3)*(iPullets.brown+iPullets.white)
+    new.layers <- (t==1)*(nPullets.brown+nPullets.white)*((nPullets.brown+nPullets.white)>0)
     molting <- (t==3)*(molt == 1)*(nLaying.hens.brown+nLaying.hens.white)
+    culling <- (t==3)*(molt == 0)*(nLaying.hens.brown+nLaying.hens.white)
+
 
     # Updating Counts
-    nPullets.brown <- nPullets.brown + (maturing - new.layers)*(nChicks.brown > 0)
-    nLaying.hens.brown <- nLaying.hens.brown + (new.layers-molting)*(nLaying.hens.brown > 0)
-    nBreed.hens.brown <- iBreed.hens.brown
+    nLaying.hens.brown <- nLaying.hens.brown + (new.layers-culling)*(iPullets.brown > 0)
+    nPullets.brown <- nPullets.brown + (new.pullets-new.layers)
+    nBreed.hens.brown <- nBreed.hens.brown
     nMolt.hens.brown <- nMolt.hens.brown + (molting)
-    nPullets.white <- iPullets.white + (maturing - new.layers)*(nChicks.white > 0)
-    nLaying.hens.white <- iLaying.hens.white + (maturing - new.layers)*(nLaying.hens.white > 0)
-    nBreed.hens.white <- iBreed.hens.white
+    nLaying.hens.white <- nLaying.hens.white + (new.layers-culling)*(iPullets.white > 0)
+    nPullets.white <- nPullets.white + (new.pullets - new.layers)
+    nBreed.hens.white <- nBreed.hens.white
     nMolt.hens.white <- nMolt.hens.white
+
+    meat_produced <- 0
   }
 
   if(animal == 'dairy') {
@@ -73,10 +77,10 @@ while(nDay <= fDay) {
     culling <- (kCull/100*nLact)/365
 
     # Excretions
-    Nexc <- calf.N()+heifer.first.lact.N()+heifer.second.lact.N()+heifer.third.lact.N()+
-      heifer.first.dry.N()+heifer.second.dry.N()+heifer.third.dry.N()+cow.lact.N()+cow.dry.N()
-    Pexc <- calf.P()+heifer.first.lact.P()+heifer.second.lact.P()+heifer.third.lact.P()+
-      heifer.first.dry.P()+heifer.second.dry.P()+heifer.third.dry.P()+cow.lact.P()+cow.dry.P()
+    # Nexc <- calf.N()+heifer.first.lact.N()+heifer.second.lact.N()+heifer.third.lact.N()+
+    #   heifer.first.dry.N()+heifer.second.dry.N()+heifer.third.dry.N()+cow.lact.N()+cow.dry.N()
+    # Pexc <- calf.P()+heifer.first.lact.P()+heifer.second.lact.P()+heifer.third.lact.P()+
+    #   heifer.first.dry.P()+heifer.second.dry.P()+heifer.third.dry.P()+cow.lact.P()+cow.dry.P()
 
     #Update Numbers of Animals
     nCalf <- nCalf + born - new.first.lact + 1
@@ -99,7 +103,7 @@ while(nDay <= fDay) {
     lactating <- kCow.birth * nCow.dry
     bred.cows <- kCow.bred * nCow.lact
     dry.cows <- kCow.dry * nCow.bred
-    slaugher.lact.cows <- kCow.slaughter * nCow.lact
+    slaughter.lact.cows <- kCow.slaughter * nCow.lact
 
     growing.steers <- kProd.steer.grow * nProd.bull.calf
     growing.cows <- kProd.cow.grow * nProd.cow.calf
@@ -115,10 +119,8 @@ while(nDay <= fDay) {
     slaughter.bred.bulls <- kBreed.bull.slaughter * nBreed.bull.mature
 
     # Excretions
-    Nexc <- calf.N()+heifer.first.lact.N()+heifer.second.lact.N()+heifer.third.lact.N()+
-      heifer.first.dry.N()+heifer.second.dry.N()+heifer.third.dry.N()+cow.lact.N()+cow.dry.N()
-    Pexc <- calf.P()+heifer.first.lact.P()+heifer.second.lact.P()+heifer.third.lact.P()+
-      heifer.first.dry.P()+heifer.second.dry.P()+heifer.third.dry.P()+cow.lact.P()+cow.dry.P()
+    # Nexc <-   Prod.calf.N()+Prod.steer.grow.N()+Prod.cow.grow.N()+Breed.bull.grow.N()+Breed.cow.grow.N()+Breed.bull.mature.N()
+    # Pexc <- Prod.calf.P()+Prod.steer.grow.P()+Prod.cow.grow.P()+Breed.bull.grow.P()+Breed.cow.grow.P()+Breed.bull.mature.P()
 
     # Update Numbers of Animals
     nCow.bred <- nCow.bred + bred.cows - dry.cows - slaughter.lact.cows
@@ -129,7 +131,7 @@ while(nDay <= fDay) {
     nProd.cow.calf <- nProd.cow.calf + (calves*(1-male.birth.rate)) - growing.cows
     nProd.steer.grow <- nProd.steer.grow + growing.steers - finishing.steers
     nProd.cow.grow <- nProd.cow.grow + growing.cows - finishing.cows
-    nProd.steer.finish <- nProd.steer.finish + finishing.steer - slaughter.steer
+    nProd.steer.finish <- nProd.steer.finish + finishing.steers - slaughter.steers
     nProd.cow.finish <- nProd.cow.finish + finishing.cows - slaughter.cows
 
     nBreed.cow.calf <- nBreed.cow.calf + (calves*(1-male.birth.rate)*breedstock.rate) - growing.bred.cows
@@ -139,54 +141,54 @@ while(nDay <= fDay) {
     nBreed.bull.mature <- nBreed.bull.mature + mature.bred.bulls - slaughter.bred.bulls
 
     meat_produced <- sum((slaughter.bred.bulls*breed.bull.wt),(slaughter.lact.cows*lact.cow.wt),
-                         (slaughter.cows*cow.max.wt),(slaughter.bulls*steer.max.wt))
+                         (slaughter.cows*cow.max.wt),(slaughter.bred.bulls*steer.max.wt))
   }
 
   # New Totals
   Meat <- Meat + meat_produced
   # Eggs <- Eggs + laying*nLayers
   # Milk <- Milk + kMilk*nLact
-  N <- N + Nexc
-  P <- P + Pexc
-  P.day <- Pexc
+  # N <- N + Nexc
+  # P <- P + Pexc
+  # P.day <- Pexc
 
-  # Update Numbers of Animals
-  flow[1,nDay] <- nCalf
-  flow[2,nDay] <- nHeifer.first.lact
-  flow[3,nDay] <- nHeifer.first.dry
-  flow[4,nDay] <- nLact
-  flow[5,nDay] <- nDry
-  flow[6,nDay] <- nHeifer.second.lact
-  flow[7,nDay] <- nHeifer.third.dry
-  flow[8,nDay] <- nHeifer.third.lact
-  flow[9,nDay] <- nHeifer.second.dry
+  # # Update Numbers of Animals
+  # flow[1,nDay] <- nCalf
+  # flow[2,nDay] <- nHeifer.first.lact
+  # flow[3,nDay] <- nHeifer.first.dry
+  # flow[4,nDay] <- nLact
+  # flow[5,nDay] <- nDry
+  # flow[6,nDay] <- nHeifer.second.lact
+  # flow[7,nDay] <- nHeifer.third.dry
+  # flow[8,nDay] <- nHeifer.third.lact
+  # flow[9,nDay] <- nHeifer.second.dry
 
-  # Update values
-  val[1,nDay] <- nCalf
-  val[2,nDay] <- nHeifer.third.dry
-  val[3,nDay] <- nLact
-  val[4,nDay] <- nDry
-  val[5,nDay] <- total.parlor
-  val[6,nDay] <- total.drypen
-  val[7,nDay] <- Meat
+  # # Update values
+  val[1,nDay] <- nProd.bull.calf
+  val[2,nDay] <- nProd.steer.grow
+  val[3,nDay] <- nProd.steer.finish
+  # val[4,nDay] <- nLaying.hens.brown
+  # val[5,nDay] <- total.parlor
+  # val[6,nDay] <- total.drypen
+  # val[7,nDay] <- Meat
   # val[8,nDay] <- ADG*1000
-  val[9,nDay] <- Nexc
-  val[10,nDay] <- P
+  # val[9,nDay] <- Nexc
+  # val[10,nDay] <- P
 
   nDay = nDay+1
 }
 ##############################################
 
 # Plot results
-par(mfrow = c(2,5))
-plot(flow[1,], main = 'Calves', xlab = 'Day', ylab = 'Count')
-plot(flow[2,], main = '1st Lact Heifers', xlab = 'Day', ylab = 'Count')
-plot(flow[3,], main = '1st Dry Heifers', xlab = 'Day', ylab = 'Count')
-plot(flow[6,], main = '2nd Lact Heifers', xlab = 'Day', ylab = 'Count')
-plot(flow[9,], main = "2nd Dry Heifers", xlab = 'Day', ylab = 'Count')
-plot(flow[8,], main = "3rd Lact Heifers", xlab = 'Day', ylab = 'Count')
-plot(flow[7,], main = '3rd Dry Heifers', xlab = 'Day', ylab = 'Count')
-plot(flow[4,], main = 'Lact Cows', xlab = 'Day', ylab = 'Count')
-plot(flow[5,], main = 'Dry Cows', xlab = 'Day', ylab = 'Count')
+par(mfrow = c(1,3))
+plot(val[1,], main = 'calves', xlab = 'Day', ylab = 'Count')
+plot(val[2,], main = 'steer.grow', xlab = 'Day', ylab = 'Count')
+plot(val[3,], main = 'steer.finish', xlab = 'Day', ylab = 'Count')
+# plot(val[6,], main = '2nd Lact Heifers', xlab = 'Day', ylab = 'Count')
+# plot(val[9,], main = "2nd Dry Heifers", xlab = 'Day', ylab = 'Count')
+# plot(val[8,], main = "3rd Lact Heifers", xlab = 'Day', ylab = 'Count')
+# plot(val[7,], main = '3rd Dry Heifers', xlab = 'Day', ylab = 'Count')
+# plot(val[4,], main = 'Lact Cows', xlab = 'Day', ylab = 'Count')
+# plot(val[5,], main = 'Dry Cows', xlab = 'Day', ylab = 'Count')
 
 # plot(val[10,], main = "P Excretion", xlab = 'Day', ylab = 'Wt, kg')
