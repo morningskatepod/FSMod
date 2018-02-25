@@ -170,39 +170,12 @@ if(animal == 'dairy') {
     return((calf_DMI*calf_CP*112.55)*nCalf)
   }
 
-  heifer.first.lact.P <- function() {
-    heifer_DMI <- heifer_DMI(wtHeifer.first.lact)
-    return((heifer_DMI*heifer_CP*78.39+51.4)*nHeifer.first.lact)
-  }
-
-  heifer.second.lact.P <- function() {
-    heifer_DMI <- heifer_DMI(wtHeifer.second.lact)
-    return((heifer_DMI*heifer_CP*78.39+51.4)*nHeifer.second.lact)
-  }
-
-  heifer.third.lact.P <- function() {
-    heifer_DMI <- heifer_DMI(wtHeifer.third.lact)
-    return((heifer_DMI*heifer_CP*78.39+51.4)*nHeifer.third.lact)
-  }
-
-  heifer.first.dry.P <- function() {
-    heifer_DMI <- heifer_DMI(wtHeifer.first.dry)
-    return((heifer_DMI*heifer_CP*78.39+51.4)*nHeifer.first.dry)
-  }
-
-  heifer.second.dry.P <- function() {
-    heifer_DMI <- heifer_DMI(wtHeifer.second.dry)
-    return((heifer_DMI*heifer_CP*78.39+51.4)*nHeifer.second.dry)
-  }
-
-  heifer.third.dry.P <- function() {
-    heifer_DMI <- heifer_DMI(wtHeifer.third.dry)
-    return((heifer_DMI*heifer_CP*78.39+51.4)*nHeifer.third.dry)
-  }
-
   cow.lact.P<- function() {
-    lact_DMI <- lact_cow_DMI(wtLact/nLact)
-    return(((lact_DMI*lact_CP*84.1)+(wtLact/nLact*0.196))*nLact)
+    DMI <- lact_cow_DMI(wtLact/nLact)
+    return(((lact_DMI*lact_P)-(2*(wtLact/nLact)/1000)-0.02743*
+              exp(((0.05527-0.000075*DIM)*DIM))-
+            0.02743*exp(((0.05527-0.000075*(DIM-1))*(DIM-1)))*
+            (1.2+4.635*MW^0.22*(wtLact/nLact)^-0.22)*ADG/0.96)*nLact)
   }
 
   #Use beef equation

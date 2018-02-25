@@ -76,7 +76,7 @@ dairy_ADG <- function(t) { #From Perotto et al, 1992
   return((A*(1-(b*exp(-k*t)))^M)/1000))
 }
 
-area <- function(days) integrate(dairy_ADG, lower = 0, upper = ifelse(days<2500, days, 2500))$value+rnorm(n = 1, mean = 0, sd = days/100)
+area <- function(days) integrate(dairy_ADG, lower = 0, upper = ifelse(days<2500, days, 2500))$value+rnorm(n = 1, mean = 0, sd = min(days/100, 20))
 v.area <- Vectorize(area)
 
 
@@ -194,7 +194,7 @@ while(nDay <= fDay) {
                               days = rep(1, nrow(new_calves)),
                               RMP = round(runif(n =  nrow(new_calves), min = 1, max = 9)),
                               tSCC = rnorm(n =  nrow(new_calves), mean = 1, 0.4),
-                              cECM = ((new_calves$cECM-1)*cor)+1,
+                              cECM = rnorm(n = nrow(new_calves), mean =((new_calves$cECM-1)*cor)+1,sd = 0.4),
                               Fat = rnorm(n =  nrow(new_calves), mean = MilkFat, sd = 0.1),
                               Protein = rnorm(n =  nrow(new_calves), mean = MilkProtein, sd = 0.1),
                               out = rep(0, nrow(new_calves)))
@@ -206,7 +206,7 @@ while(nDay <= fDay) {
     df.calves.new$preg <- rep(0, nrow(new_calves))
     df.cows <- rbind(df.cows, df.calves.new)
   }
-  new_cows <- df.cows[df.cows$out == 1 & df.cows$days %% 365 == 305,]
+  new_cows <- df.cows[(df.cows$out == 1 | df.cows$preg == 0) & df.cows$days %% 365 == 305,]
   dead <- rbind(dead, new_cows)
   df.cows <- if(nrow(new_cows) > 1) {df.cows[-as.numeric(rownames(new_cows)),]} else {df.cows}
   if(nrow(new_cows) > 0 & nrow(df.cows) < 100) {
