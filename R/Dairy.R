@@ -1,4 +1,4 @@
-setwd("C:/Users/dougl/Documents/PhD Papers/Farm Model")
+# setwd("C:/Users/dougl/Documents/PhD Papers/004 - Farm Model")
 ############################################
 
 # Set all rates to 0 before reading files

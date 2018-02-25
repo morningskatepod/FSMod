@@ -1,8 +1,8 @@
-setwd("C:/Users/dougl/Documents/PhD Papers/Farm Model")
+setwd("C:/Users/dougl/Documents/PhD Papers/004 - Farm Model")
 
 #####################  FOR LOOP #######################
 #Edit source of dairy file
-source('FSMod/R/Beef.R')
+source('FSMod/R/Dairy.R')
 
 #Write an array
 val <- array(1, dim = c(10, length(seq(iDay,fDay, by = 1))))
@@ -164,9 +164,9 @@ while(nDay <= fDay) {
   # flow[9,nDay] <- nHeifer.second.dry
 
   # # Update values
-  val[1,nDay] <- nProd.bull.calf
-  val[2,nDay] <- nProd.steer.grow
-  val[3,nDay] <- nProd.steer.finish
+  val[1,nDay] <- nCalf
+  val[2,nDay] <- nHeifer.first.lact
+  val[3,nDay] <- nLact
   # val[4,nDay] <- nLaying.hens.brown
   # val[5,nDay] <- total.parlor
   # val[6,nDay] <- total.drypen
