@@ -1,6 +1,6 @@
 # Individual dairy
 setwd("C:/Users/dougl/Documents/PhD Papers/004 - Farm Model")
-
+start_time <- Sys.time()
 # Read input file
 source('dairy.ind.text')
 
@@ -36,12 +36,12 @@ heifer_DMI <- function(BW) {
   return(DMI)
 }
 #Lactating Cows
-lact_cow_DMI <- function(BW) {
+cow_lact_DMI <- function(BW) {
   DMI <- ((0.0185 * BW) + (0.305 * FCM))*DMIAF_temp*BI
   return(DMI)
 }
 #Dry Cows
-dry_cow_DMI <- function(BW) {
+cow_dry_DMI <- function(BW) {
   SBW <- 0.94*BW
   DMI <- (0.0185 * SBW)*DMIAF_temp*BI
   return(DMI)
@@ -78,196 +78,232 @@ dairy_ADG <- function(t) { #From Perotto et al, 1992
 }
 
 #For cumulative BW
-area <- function(days) integrate(dairy_ADG, lower = 0, upper = ifelse(days<2500, days, 2500))$value+rnorm(n = 1, mean = 0, sd = min(days/20, 100))
+area <- function(days) integrate(dairy_ADG, lower = 0, upper = ifelse(days<2500, days, 2500))$value
 v.area <- Vectorize(area)
 
 
 # Combine all equations to predict DMI
-dairy_DMI <- function(BW,days) {
-  if(days <= 365) {return(calf_DMI(BW))}
-  else if(days <= 730) {return(heifer_DMI(BW))}
-  else if(days %% 365 <= 305) {return(lact_cow_DMI(BW))}
-  else {return(dry_cow_DMI(BW))}
-}
-
-# Predict ECM from yield
-ECM <- function(MY, Fat, Protein) {
-  return(MY*(0.122*Fat+0.077*Protein+0.249))
+dairy_DMI <- function(df) {
+  df$DMI = calf_DMI(df$BW)*(df$days < 365) + heifer_DMI(df$BW)*(df$days > 365 & df$days <= 730) +
+    cow_lact_DMI(df$BW)*(df$days >=730 & df$days%%365 <= 305) +
+    cow_dry_DMI(df$BW)*(df$days >= 730 & df$days%%365 > 305)
+  return(df$DMI)
 }
 
 # Predict MY
-dairy_MY <- function(days, RMP, Fat, Protein, cECM) {
-  week_of_lactation <- if(days > 730) {if(days %% 365 <= 305) {days%%365/7} else {return(0)}} else {return(0)}
-  PKYDa = (0.125*RMP+0.375)*PKYD
+dairy_MY <- function(df) {
+  df$wol = (df$days > 730 & df$days %% 365 <= 305)*(df$days%%365/7)
+  PKYDa = (0.125*df$RMP+0.375)*PKYD
   A = 1/(PKYDa*(1/8.5)*exp(1))
-  Milk = week_of_lactation/(A*exp((1/8.5)*week_of_lactation))
-  Milk <- if(days < 365*3) {Milk*0.74} else if(days < 365*4) {Milk*0.88} else {Milk}
-  Milk <- ECM(Milk, Fat, Protein)*cECM # Correct for productivity
-  return(Milk)
+  Milk = df$wol/(A*exp((1/8.5)*df$wol))
+  Milk = Milk*(df$days < 365*3)*0.74 + Milk*(df$days < 365*4 & df$days >= 365*3)*0.88+ Milk
+  df$MY = Milk*(0.122*df$Fat+0.077*df$Protein+0.249)*df$cECM
+  return(df$MY)
 }
 
 # Combine all equations to predict N
-dairy_N <- function(DMI,BW, days) {
-  if(days <= 365) {return(calf.N(DMI))}
-  else if(days <= 730) {return(heifer.N(DMI))}
-  else if(days %% 365 <= 305) {return(cow.lact.N(DMI,BW))}
-  else {return(cow.dry.N(DMI))}
+dairy_N <- function(df) {
+  df$N <- calf.N(df$DMI)*(df$days < 365) + heifer.N(df$DMI)*(df$days > 365 & df$days <= 730) +
+    cow.lact.N(df$DMI, df$BW)*(df$days >=730 & df$days%%365 <= 305) +
+    cow.dry.N(df$DMI)*(df$days >= 730 & df$days%%365 > 305)
+  return(df$N)
 }
 
 # Predict pregnancy
 # takes rate of preg success / # of days they will try
 # if shes marked to cull, won't get preg
 # If shes on day 0, give birth
-dairy_preg <- function(days,preg, out) {
-  if(days%%365 == 0 & days > 365 & preg == 1) {return(0)}
-  else if(out == 1) {return(0)}
-  else if(preg == 1) {return(1)}
-  else if(days%%365 <= 305) {return(ifelse(runif(n = 1, 0,100)<kPreg, 1, 0))}
-  else {return(0)}
+dairy_preg <- function(df, preg = 0) {
+  if('preg' %in% names(df) == F) {df$preg = preg}
+  df$preg = (df$days%%365 != 0 & df$preg == 1)*1 +
+    ifelse((runif(n = nrow(df), 0,1)<kPreg/220)*(df$days > 365 & df$days%%365 <= 280 & df$days%%365 > 60 & preg == 0),1,0)
+return(df$preg)
 }
 
 #Things for Production Above Replacement (PAR)
-survival <- function()
-FP <- function(days, RMP, Fat, Protein, silent = T) {
+# survival <- function()
+FV <- function(df) {
   cor = 0.3
   sum = 0
-  if(days < 365*3) {
-    next_lact = (round(days/365)+1)*365
-    second = integrate(f = dairy_MY, lower = next_lact, upper = next_lact+305,
-             RMP = RMP, Fat = Fat, Protein = Protein)$value
-    second = (((second/mean_MY-1)*cor)+1)*mean_MY
-    sum = sum + second
-    for(i in 3:8) {
-      third = integrate(f = dairy_MY, lower = next_lact+365, upper = next_lact+365+305,
-                       RMP = RMP, Fat = Fat, Protein = Protein)$value
-      third = (((third/mean_MY-1)*(cor^(i-1)))+1)*mean_MY
-      sum = sum + third
-    }
-  } else {for(i in (round(days/365)+1):8) {
-    third = integrate(f = dairy_MY, lower = next_lact+365, upper = next_lact+365+305,
-                     RMP = RMP, Fat = Fat, Protein = Protein)$value
-    third = (((third/mean_MY-1)*(cor^(i-1)))+1)*mean_MY
-    sum = sum + third
-  }}
+  PKYDa = (0.125*5+0.375)*PKYD
+  A = 1/(PKYDa*(1/8.5)*exp(1))
+  currentlact = (sum((seq(pmin(df$days%%365,304),305,1)%%365/7)/(A*exp((1/8.5)*
+                  (seq(pmin(df$days%%365,304),305,1)%%365/7))))*
+                   (0.122*df$Fat+0.077*df$Protein+0.249)*df$cECM)*((((df$days/365<3)*0.74))+((df$days/365<4)*0.88)+((df$days/365>=4)*1))
+  first = (sum((seq(1,305,1)%%365/7)/(A*exp((1/8.5)*(seq(1,305,1)%%365/7))))*
+    (0.122*df$Fat+0.077*df$Protein+0.249)*df$cECM*0.74)*(df$days < 365*2)
+  second = (sum((seq(1,305,1)%%365/7)/(A*exp((1/8.5)*(seq(1,305,1)%%365/7))))*
+    (0.122*df$Fat+0.077*df$Protein+0.249)*df$cECM*0.88*0.227*kPreg/100)*(df$days < 365*3)
+  third = (sum((seq(1,305,1)%%365/7)/(A*exp((1/8.5)*(seq(1,305,1)%%365/7))))*
+    (0.122*df$Fat+0.077*df$Protein+0.249)*df$cECM*
+    ifelse(df$days < 365*2,0.1148, 0.0261)*kPreg/100)*(df$days < 365*4)
+  fourth = (sum((seq(1,305,1)%%365/7)/(A*exp((1/8.5)*(seq(1,305,1)%%365/7))))*
+    (0.122*df$Fat+0.077*df$Protein+0.249)*df$cECM*
+    ifelse(df$days < 365*2,0.0018238, ifelse(df$days < 365*3,0.0080266,0.07))*kPreg/100)*(df$days < 365*5)
+
   return(sum)
+}
+
+
+FP <- function(df) {
+  a = ((1-dweibull(x = pmax(0,((df$days/365)-1)), shape = 1.5, scale = 1.0))-
+         (1-dweibull(x = pmax(0,((df$days/365)-2)), shape = 1.5, scale = 1.0)))/
+    (1-(1-dweibull(x = pmax(0,((df$days/365)-2)), shape = 1.5, scale = 1.0)))
+  a[is.nan(a)] <- 1
+  a[is.infinite(a)] <- 0
+  return(a)
+}
+
+new.group <- function(ids, ages, preg, prog = 1) {
+#Make initial data frame - lactating
+df.cows <- data.frame(CowID = ids,
+                      days = sample(ages, length(ids), replace = T),
+                      var = rnorm(n = length(ids),mean = 0, sd = 10),
+                      RMP = round(runif(n = length(ids), min = 1, max = 9)),
+                      tSCC = rnorm(n = length(ids), mean = 1, 0.4),
+                      cECM = rnorm(n = length(ids), mean = ((prog-1)*cor)+1, 0.4),
+                      Fat = rnorm(n = length(ids), mean = MilkFat, sd = 0.1),
+                      Protein = rnorm(n = length(ids), mean = MilkProtein, sd = 0.1),
+                      out = rep(0,length(ids)))
+df.cows$ADG <- mapply(dairy_ADG, df.cows$days)
+df.cows$BW <- v.area(df.cows$days)*(((df.cows$var)/100)+1)
+df.cows$DMI <- dairy_DMI(df.cows)
+df.cows$MY <- dairy_MY(df.cows)
+df.cows$N <- dairy_N(df.cows)
+df.cows$preg <- dairy_preg(df.cows, preg = 0)
+return(df.cows)
+}
+
+## Funciton to collect data
+collect_data <- function(nDay) {
+  outputs = list()
+  outputs[1] <- sum(df.cows$MY)
+  outputs[2] <- sum(df.cows$N)
+  outputs[3] <- nrow(df.cows[df.cows$days < 365,])
+  outputs[4] <- nrow(df.cows[df.cows$days >= 730 & df.cows$days%%365 <= 305,])
+  outputs[5] <- nrow(df.cows[df.cows$days >= 730 & df.cows$days%%365 > 305,])
+  outputs[6] <- sum(df.cows$DMI)
+  outputs[7] <- nrow(df.cows[df.cows$days >= 365 & df.cows$days < 730,])
+  outputs[8] <- mean(df.cows[df.cows$days >= 730 & df.cows$days%%365 <= 60,"out"])
+  outputs[9] <- mean(df.cows[df.cows$days >= 730 & df.cows$days%%365 <= 305,"preg"])
+  outputs[10] <- target
+  return(unlist(outputs))
 }
 
 
 ### Start
 set.seed(1)
-total.start.cows = 100
+total.start.cows = 1000
 
-#Make initial data frame
-df.cows <- data.frame(CowID = seq(1,total.start.cows,1),
-                      days = sample(1:4000, total.start.cows, replace = T),
-                      RMP = round(runif(n = total.start.cows, min = 1, max = 9)),
-                      tSCC = rnorm(n = total.start.cows, mean = 1, 0.4),
-                      cECM = rnorm(n = total.start.cows, mean = 1, 0.4),
-                      Fat = rnorm(n = total.start.cows, mean = MilkFat, sd = 0.1),
-                      Protein = rnorm(n = total.start.cows, mean = MilkProtein, sd = 0.1),
-                      out = rep(0,total.start.cows))
-df.cows$ADG <- mapply(dairy_ADG, df.cows$days)
-df.cows$BW <- v.area(df.cows$days)
-df.cows$DMI <- mapply(dairy_DMI, df.cows$BW, df.cows$days)
-df.cows$MY <- mapply(dairy_MY, df.cows$days, df.cows$RMP, df.cows$Fat, df.cows$Protein, df.cows$cECM)
-df.cows$N <- mapply(dairy_N, df.cows$DMI, df.cows$BW, df.cows$days)
-df.cows$preg <- ifelse(df.cows$days > 365 & df.cows$days%%365 <= 305, 1, 0)
-
-# Calculate mean MY for herd
-mean_MY = mean(df.cows[df.cows$days > 730,]$MY)*365
-
+lactating_ages <- c((365*2):(365*2+305),(365*3):(365*3+305),
+                    (365*4):(365*4+305),(365*5):(365*5+305))
+other_ages <- 1:(365*5+305)
+other_ages <- other_ages[-lactating_ages]
 # correlation of cECM to young
 cor = 0.3
 
-# Plot Stats
+#Make initial data frame - lactating
+df.cows <- new.group(ids = seq(1,total.start.cows,1),
+                     ages = sample(lactating_ages, total.start.cows, replace = T),
+                     preg = 0)
+
+# non lactating
+df.cows2 <- new.group(ids = seq(total.start.cows+1,total.start.cows+round(total.start.cows*0.17),1),
+                     ages = sample(1:365, round(total.start.cows*0.17), replace = T),
+                     preg = 0)
+
+df.cows <- rbind(df.cows, df.cows2)
+
+df.cows <- rbind(df.cows, new.group(ids = seq(nrow(df.cows)+1,nrow(df.cows)+round(total.start.cows*0.17),1),
+                                  ages = other_ages, preg = 1))
+# Calculate mean MY for herd
+mean_MY = mean(df.cows[df.cows$days > 730,]$MY)*365
+
+# # Plot Stats
 par(mfrow= c(2,2))
 par(mar = c(3,4,3,4))
-plot(df.cows$days, df.cows$ADG)
-plot(df.cows$days, df.cows$BW)
-plot(df.cows$days, df.cows$DMI)
-plot(df.cows$days, df.cows$N)
+# plot(df.cows$days, df.cows$ADG, ylab = 'ADG')
+# plot(df.cows$days, df.cows$BW, ylab = 'BW')
+# plot(df.cows$days, df.cows$DMI, ylab = 'DMI')
+# plot(df.cows$days, df.cows$N, ylab = 'N, per day')
 
 ### Running Simulation
 n = rep(0, fDay)
 
 # DFs to collect info suring run
 dead <- data.frame()
-outputs <- data.frame(Milk = rep(0,fDay), N = rep(0,fDay),
-                      calves = rep(0,fDay), lact = rep(0,fDay), dry = rep(0,fDay),
-                      age_lact = rep(0, fDay))
+# outputs <- data.frame(Milk = rep(0,fDay), N = rep(0,fDay),
+#                       calves = rep(0,fDay), lact = rep(0,fDay), dry = rep(0,fDay),
+#                       age_lact = rep(0, fDay),heifer = rep(0, fDay))
+outputs <- matrix(nrow = fDay, ncol = 10)
+off = 0
+target = 0
+
+# ETA
+paste('projected completion time:',(total.start.cows*fDay*60/1000*0.01)+start_time)
+
 # Loop
 while(nDay <= fDay) {
   # Collect data
-  outputs[nDay,1] <- sum(df.cows$MY)
-  outputs[nDay,2] <- sum(df.cows$N)
-  outputs[nDay,3] <- nrow(df.cows[df.cows$days < 365,])
-  outputs[nDay,4] <- nrow(df.cows[df.cows$days >= 730 & df.cows$days%%365 <= 305,])
-  outputs[nDay,5] <- nrow(df.cows[df.cows$days >= 730 & df.cows$days%%365 > 305,])
-  outputs[nDay,6] <- mean(df.cows[df.cows$days >= 730 & df.cows$days%%365 <= 60,"days"])
+  outputs[nDay,] <- collect_data(nDay)
 
   # Marking/Culling
+  currentMark <- mean(df.cows[df.cows$days >= 730 & df.cows$days%%365 <= 60,"out"])
+  heifers <- nrow(df.cows[df.cows$days > (730- markFreq) & df.cows$days < 730,])
+  dry <- nrow(df.cows[df.cows$days >= 730 & df.cows$days%%365 > 365 - markFreq,])
+  lastOff = off
+  off = (nrow(df.cows[df.cows$days >= 730 & df.cows$days%%365 <= 305,]) -
+           total.start.cows)
+  target = round(sqrt(max(0,off + heifers + dry)))
+
   #Mark every x days
   if(nDay %% markFreq == 0) {
-    over = (nrow(df.cows)-100)*2
+
+    over = max(0,target)
+    possible_cull = df.cows[(df.cows$preg == 0 & df.cows$days >=365*2 & df.cows$days%%365 <= 60),]
+
+    # Culling strats
     if(cullStrat == 1) {
-      df.cows[order(df.cows$cECM),][1:over,'out'] <- 1
+      idsCull <- possible_cull[order(possible_cull$cECM),][1:over,'CowID']
+      df.cows[df.cows$CowID %in% idsCull, 'out'] <- 1
     } else if(cullStrat == 2) {
-      df.cows[order(df.cows$days),][1:over,'out'] <- 1
+      idsCull <- possible_cull[order(possible_cull$days, decreasing = T),][1:over,'CowID']
+      df.cows[df.cows$CowID %in% idsCull, 'out'] <- 1
     } else {
-      df.cows[order(df.cows$cECM),][1:over,'out'] <- 1 # Needs changed
+      possible_cull[order(possible_cull$cECM),][1:over,'out'] <- 1 # Needs changed
     }
   }
 
+  # Decide which cows will be dead before next lactation
+
   # Check to see if any cows calved
   new_calves <- df.cows[df.cows$preg == 1 & df.cows$days %% 365 == 0 & runif(1,0,1) < (rateFemale/100),]
-
+  df.cows[(df.cows$preg == 0 & df.cows$days > 730 & df.cows$days %% 365 == 0 & runif(nrow(df.cows),0,1) < FP(df.cows)),'out'] <- 1
   # If new female calves
   # make new df for those calves related to their mothers traits
-  if(nrow(new_calves) > 0) {
-    df.calves.new <- data.frame(CowID = new_calves$CowID+(total.start.cows*10),
-                              days = rep(1, nrow(new_calves)),
-                              RMP = round(runif(n =  nrow(new_calves), min = 1, max = 9)),
-                              tSCC = rnorm(n =  nrow(new_calves), mean = 1, 0.4),
-                              cECM = rnorm(n = nrow(new_calves), mean =((new_calves$cECM-1)*cor)+1,sd = 0.4),
-                              Fat = rnorm(n =  nrow(new_calves), mean = MilkFat, sd = 0.1),
-                              Protein = rnorm(n =  nrow(new_calves), mean = MilkProtein, sd = 0.1),
-                              out = rep(0, nrow(new_calves)))
-    df.calves.new$ADG <- mapply(dairy_ADG, df.calves.new$days)
-    df.calves.new$BW <- v.area(df.calves.new$days)
-    df.calves.new$DMI <- mapply(dairy_DMI, df.calves.new$BW, df.calves.new$days)
-    df.calves.new$MY <- mapply(dairy_MY, df.calves.new$days, df.calves.new$RMP, df.calves.new$Fat, df.calves.new$Protein, df.calves.new$cECM)
-    df.calves.new$N <- mapply(dairy_N, df.calves.new$DMI, df.calves.new$BW, df.calves.new$days)
-    df.calves.new$preg <- rep(0, nrow(new_calves))
+  if(nrow(new_calves)>0) {
+    df.calves.new <- new.group(ids = new_calves$CowID+(total.start.cows*10),
+                              ages = rep(1, nrow(new_calves)), preg = 0,
+                              prog = new_calves$cECM)
+
     # add calves to full group
     df.cows <- rbind(df.cows, df.calves.new)
   }
 
   # if cows dry w/o getting pregnant or are marked, cull now
-  new_cows <- df.cows[(df.cows$out == 1 | df.cows$preg == 0) & df.cows$days %% 365 == 305,]
+  new_cows <- df.cows[df.cows$out == 1 & df.cows$days %% 365 == 305,]
   #Keep track of who leaves herd
   dead <- rbind(dead, new_cows)
-  # collect total cows
-  n[nDay] = nrow(new_cows)
+
 
   # remove culled cows from list
-  df.cows <- if(nrow(new_cows) > 1) {df.cows[-as.numeric(rownames(new_cows)),]} else {df.cows}
+  df.cows <- if(nrow(new_cows) > 0) {df.cows[!(df.cows$CowID %in% new_cows$CowID),]} else {df.cows}
 
   # if any cows culled and total herd is below strating #, add more heifers
-  if(nrow(new_cows) > 0 & nrow(df.cows) < 100) {
-    df.cows.new <- data.frame(CowID = new_cows$CowID+total.start.cows,
-                              days = rep(365*2, nrow(new_cows)),
-                              RMP = round(runif(n =  nrow(new_cows), min = 1, max = 9)),
-                              tSCC = rnorm(n =  nrow(new_cows), mean = 1, 0.4),
-                              cECM = rnorm(n =  nrow(new_cows), mean = 1, 0.4),
-                              Fat = rnorm(n =  nrow(new_cows), mean = MilkFat, sd = 0.1),
-                              Protein = rnorm(n =  nrow(new_cows), mean = MilkProtein, sd = 0.1),
-                              out = rep(0, nrow(new_cows)))
-    df.cows.new$ADG <- mapply(dairy_ADG, df.cows.new$days)
-    df.cows.new$BW <- v.area(df.cows.new$days)
-    df.cows.new$DMI <- mapply(dairy_DMI, df.cows.new$BW, df.cows.new$days)
-    df.cows.new$MY <- mapply(dairy_MY, df.cows.new$days, df.cows.new$RMP, df.cows.new$Fat, df.cows.new$Protein, df.cows.new$cECM)
-    df.cows.new$N <- mapply(dairy_N, df.cows.new$DMI, df.cows.new$BW, df.cows.new$days)
-    df.cows.new$preg <- rep(0, nrow(new_cows))
+  if(off < 0 & nrow(new_cows) > 0) {
+    df.cows.new <- new.group(new_cows$CowID+total.start.cows,
+                             rep(365*2, nrow(new_cows)),
+                             preg = 1)
     df.cows <- rbind(df.cows, df.cows.new)
   }
 
@@ -276,35 +312,52 @@ while(nDay <= fDay) {
   #Update other fields
   df.cows$ADG <- mapply(dairy_ADG, df.cows$days)
   df.cows$BW <- v.area(df.cows$days)
-  df.cows$DMI <- mapply(dairy_DMI, df.cows$BW, df.cows$days)
-  df.cows$MY <- mapply(dairy_MY, df.cows$days, df.cows$RMP, df.cows$Fat, df.cows$Protein, df.cows$cECM)
-  df.cows$N <- mapply(dairy_N, df.cows$DMI, df.cows$BW, df.cows$days)
-  df.cows$preg <- mapply(dairy_preg, df.cows$days, df.cows$preg, df.cows$out)
-
+  df.cows$DMI <- dairy_DMI(df.cows)
+  df.cows$MY <- dairy_MY(df.cows)
+  df.cows$N <- dairy_N(df.cows)
+  df.cows$preg <- dairy_preg(df.cows)
 
   #change day # for cows and counter
   df.cows$days <- df.cows$days + 1
   nDay = nDay+1
+  if(outputs[nDay-1,4] > total.start.cows*2) {break}
 }
+
+
+end_time <- Sys.time()
+
+## Plotting results
 
 moving_avg <- function(x, n) {
   cx <- c(rep(NA,365),cumsum(x))
   return((cx[(365+1):length(cx)] - cx[1:(length(cx) - 365)]) / 365)
 }
 
-
-rsum <- moving_avg(x = outputs$Milk, n = 365)
-plot(outputs$Milk, type = 'l')
+rsum <- moving_avg(x = outputs[,8], n = 365)
+plot(outputs[,8], type = 'l', ylab = '% Marked in Lact', xlim = c(0,fDay))
 lines(rsum, col = 'red', lwd = 2, lty = 2)
 
-rsum <- moving_avg(x = outputs$Milk/outputs$lact, n = 365)
-plot(outputs$Milk/outputs$lact, type = 'l')
+rsum <- moving_avg(x = outputs[,1]/total.start.cows, n = 365)
+plot(outputs[,1]/total.start.cows, type = 'l',
+     xlim = c(0,fDay),ylab = 'Milk/Lactating Herd Size')
 lines(rsum, col = 'red', lwd = 2, lty = 2)
 
-rsum <- moving_avg(x = outputs$N, n = 365)
-plot(outputs$N)
+rsum <- moving_avg(x = outputs[,2]/total.start.cows, n = 365)
+plot(outputs[,2]/total.start.cows, type = 'l',
+     xlim = c(0,fDay), ylab = 'N/Lactating Herd Size')
 lines(rsum, col = 'red', lwd = 2, lty = 2)
 
-plot(outputs$lact, type = 'l', ylim = c(0,120), ylab = '# of Cows')
-lines(outputs$dry, col = 'red')
-lines(outputs$calves, col = 'blue')
+rsum <- moving_avg(x = outputs[,4], n = 365)
+plot(outputs[,4], type = 'l', ylim = c(0,total.start.cows*1.2),
+     xlim = c(0,fDay), ylab = '# of Cows')
+lines(rsum, col = 'orange', lwd = 2, lty = 2)
+lines(outputs[,5], col = 'red') #dry
+lines(outputs[,3], col = 'blue') #calves
+lines(outputs[,7], col = 'green') #heifers
+abline(h = total.start.cows)
+
+paste(round((end_time - start_time)/total.start.cows/fDay*1000,5), "minutes per 1000 cow days,",
+      round((end_time - start_time),2),'Mins for', (fDay*total.start.cows), 'Total cow days')
+
+df.cows$YOL <- df.cows$days/365-1
+paste('average lactation:',round(mean(df.cows[df.cows$days >= 730 & df.cows$days%%365 <= 305,'YOL']),2))
